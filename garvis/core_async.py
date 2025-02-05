@@ -5,8 +5,7 @@ import base64
 import websockets
 import subprocess
 
-from groq import Groq as Groqq
-from openai import OpenAI as OpenAII
+from groq import Groq
 
 from .audio_processor_async import AudioProcessor
 from .listening_strategy import *
@@ -18,7 +17,7 @@ from .utils import websocker_text_iterator, create_mpv_process
 class Garvis:
     def __init__(self, 
                  assistant_name: str = DEFAULT_ASSISTANT_NAME, 
-                 llm: LLM = AsyncOpenAI(),
+                 llm: LLM = Groq(),
                  listening_strategy: ListeningStrategy = None, 
                  transcriptor=DEFAULT_TRANSCRIPTOR, 
                  verbose: bool = False):
@@ -33,7 +32,6 @@ class Garvis:
         self.mpv_process = None
         self.stop_streaming = False
         self.verbose = verbose
-        self.llm = llm
         self.system_message = get_system_message(self.assistant_name)
 
         self.on_log = None
@@ -57,20 +55,17 @@ class Garvis:
 
     def transcription_stop(self):
         asyncio.create_task(self.process_collected_text())
-        # To stop the ongoing TTS if any
         self.stop_tts()
         if self.on_transcription_stop:
             self.on_transcription_stop()
 
     def transcription_update(self, index, text):
-        # Append transcription to collected text
         with self.transcription_lock:
             self.collected_text.append({"index": index, "text": text})
             self.collected_text.sort(key=lambda x: x["index"])
-                        
+            
             if self.on_transcription_update:
                 self.on_transcription_update(index, text)
-                # asyncio.create_task(self.on_transcription_update(index, text))                
 
     def llm_update(self, text):
         if self.on_llm_update:
@@ -93,35 +88,31 @@ class Garvis:
             self.on_tts_stop()
 
     def on_audio_power(self, power):
-        # Implement this in the consuming class if needed
         pass
 
     async def process_collected_text(self):
         with self.transcription_lock:
             all_text = ", ".join([chunk["text"].strip() for chunk in self.collected_text])
-        
         await self.get_llm_response(all_text)
 
     def stop_talking(self, raise_event=False):
         self.restart_mpv(raise_event=raise_event)
-        # self.stop_tts(raise_event=raise_event)
         
     def stop_tts(self, raise_event=True):
         if self.mpv_process and self.mpv_process.poll() is None:
-            # self.stop_streaming = True
-            self.mpv_process.terminate()  # Send a SIGTERM signal to the process
+            self.mpv_process.terminate()
             try:
-                self.mpv_process.wait(timeout=2)  # Wait for the process to terminate
+                self.mpv_process.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                self.mpv_process.kill()  # Force kill if it does not terminate in time
+                self.mpv_process.kill()
             finally:
                 self.mpv_process = None
-                
-    
+
     def restart_mpv(self, raise_event=True):
         self.stop_tts(raise_event=raise_event)
         time.sleep(0.1)
-        raise_event and self.tts_stop()
+        if raise_event:
+            self.tts_stop()
 
     async def text_to_speech_input_streaming(self, text_iterator):
         async with websockets.connect(WEBSOCKET_URI) as websocket:
@@ -130,7 +121,7 @@ class Garvis:
                 "voice_settings": {"stability": 0.5, "similarity_boost": 0.8},
                 "xi_api_key": ELEVENLABS_API_KEY,
             }))
-
+            
             async def listen():
                 first_chunk = True
                 while True:
@@ -154,7 +145,6 @@ class Garvis:
                 self.mpv_process = create_mpv_process()
                 self.log("Started streaming audio")
                 
-                # if mvp process is None wait a bit
                 if not self.mpv_process:
                     await asyncio.sleep(0.5)
                     
@@ -178,7 +168,7 @@ class Garvis:
                             self.mpv_process.stdin.close()
                         self.mpv_process.wait()
                         
-                except Exception as e:
+                except Exception:
                     pass
                 finally:
                     self.restart_mpv()
@@ -189,32 +179,32 @@ class Garvis:
                 await websocket.send(json.dumps({"text": text, "try_trigger_generation": True}))
 
             await websocket.send(json.dumps({"text": ""}))
-
             await listen_task
 
     async def get_llm_response(self, text):
         self.history.append({"role": "user", "content": text})
-
+        
         def llm_task():
             asyncio.run(self.process_llm_response())
 
         threading.Thread(target=llm_task).start()
 
     async def process_llm_response(self):
-        # self.history.append({"role": "user", "content": text})
-        stream = await self.llm.acompletion(
+        stream = await self.llm.chat.completions.create(
+            model="llama3-8b-8192",
             messages=[
                 {"role": "system", "content": self.system_message},
                 *self.history
             ],
+            stream=True
         )
-
+        
         self.llm_start()
 
         async def text_iterator():
             chunks = []
             async for chunk in stream:
-                response_text = chunk.choices[0].delta.content
+                response_text = chunk.choices[0].message.get("content", "")
                 if response_text:
                     self.llm_update(response_text)
                     chunks.append(response_text)
