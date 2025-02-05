@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from groq import Groq as Groqq, AsyncGroq as AsyncGroqq
-from openai import OpenAI as OpenAII, AsyncOpenAI as AsyncOpenAII
 import json
 
 class LLM(ABC):
@@ -37,8 +36,7 @@ class LLM(ABC):
     def intentify(self, text):
         completion = self.client.chat.completions.create(
             model= self.intent_model,
-            messages=[
-                {
+            messages=[{
                     "role": "system",
                     "content": "You always response JSON. "
                 },
@@ -71,12 +69,6 @@ class Groq(LLM):
         return self.client.chat.completions.create(
             messages=messages,
             **self.llm_params,
-            # stream=True
-            # model=kwargs.get('model', self.model),
-            # temperature=kwargs.get('temperature', self.temperature),
-            # max_tokens=kwargs.get('max_tokens', self.max_tokens),
-            # top_p=kwargs.get('top_p', self.top_p),
-            # stream=kwargs.get('stream', self.stream),
         )
         
     def acompletion(self, messages, **kwargs):
@@ -98,49 +90,22 @@ class AsyncGroq(LLM):
             **self.llm_params,
         )
 
-class OpenAI(LLM):
-    def __init__(self, model="gpt-4o", **kwargs):
-        super().__init__(model, **kwargs)
-        self.client = OpenAII()
-    
-    def completion(self, messages, **kwargs):
-        self.llm_params.update(kwargs)
-        return self.client.chat.completions.create(
-            messages=messages,
-            **self.llm_params
-        )
-        
-class AsyncOpenAI(LLM):
-    def __init__(self, model="gpt-4o", **kwargs):
-        super().__init__(model, **kwargs)
-        self.client = AsyncOpenAII()
-    
-    async def acompletion(self, messages, **kwargs):
-        self.llm_params.update(kwargs)
-        return await self.client.chat.completions.create(
-            messages=messages,
-            **self.llm_params
-        )
-        
-class Ollama(OpenAI):
+class Ollama(Groq):
     def __init__(self, model="llama3", **kwargs):
         super().__init__(model, **kwargs)
         self.client.base_url = "http://localhost:11434/v1"
         self.client.api_key = "ollama"
         
-class AsyncOllama(AsyncOpenAI):
+class AsyncOllama(AsyncGroq):
     def __init__(self, model="llama3", **kwargs):
         super().__init__(model, **kwargs)
         self.client.base_url = "http://localhost:11434/v1"
         self.client.api_key = "ollama"
 
 if __name__ == "__main__":
-    client = Groq()
-    client = OpenAI()
+    client = Groq()  # Initialize the Groq client
     stream = client.completion(
-                messages=[
-                    {"role": "user", "content": "Why sky os blue?"},
-                ],
+                messages=[{"role": "user", "content": "Why sky os blue?"}],
                 stream=True
             )
     
