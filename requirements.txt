@@ -1,0 +1,14 @@
+aiohttp
+docopt
+groq
+ipykernel
+nbconvert
+pillow
+pip-chill
+pyaudio
+python-dotenv
+requests-toolbelt
+semantic-router
+webrtcvad
+websockets
+yarg
