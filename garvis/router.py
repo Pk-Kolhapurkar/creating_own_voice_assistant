@@ -1,10 +1,9 @@
 from semantic_router import Route
 import os
-from semantic_router.encoders import OpenAIEncoder
+from semantic_router.encoders import GroqEncoder  # Replace OpenAIEncoder with GroqEncoder
 from semantic_router.layer import RouteLayer
 
 # Define the semantic routes for detecting stop commands
-encoder = OpenAIEncoder()
 garvis_stop = Route(
     name="garvis-stop",
     utterances=[
@@ -74,7 +73,7 @@ garvis_stop_without_name = Route(
 
 # Create a combined list of routes
 routes = [garvis_stop, garvis_stop_implicit, garvis_stop_without_name]
-rl = RouteLayer(encoder=encoder, routes=routes)
+rl = RouteLayer(encoder=GroqEncoder(), routes=routes)  # Use GroqEncoder for route layer
 
 def is_call_garvis(text):
     route = rl(text)
@@ -93,16 +92,15 @@ user_endings = Route(
         "What's your opinion on this matter?",
         "Is there more information you can provide on this topic?",
         "Based on what I've told you, how should I proceed?",
-        "That's everything I need to know for now, what should I do next?"
+        "That's everything I need to know for now, what should I do next?",
         "That's everything I need to know for now, right?"
     ],
-    # score_threshold=0.8
 )
 
 # Place the route in a list
 user_endings_routes = [user_endings]
-# Initialize the encoder and route layer
-user_endings_encoder = OpenAIEncoder()
+# Initialize the encoder and route layer with GroqEncoder
+user_endings_encoder = GroqEncoder()  # Use GroqEncoder
 user_endings_rl = RouteLayer(encoder=user_endings_encoder, routes=user_endings_routes)
 
 # Function to detect if the user has ended their conversation
